@@ -34,6 +34,42 @@ GatewayEventManager.prototype.add = function( myUser )
 	myUser.socket.on( "updatePlayerPresence", Utils.callAndCatchErrors.bind( this, this._onUpdatePlayerPresence, myUser ) );
 };
 
+GatewayEventManager.prototype.joinPrivateGame = function( myUser, roomId ) 
+{
+	myUser.state = 1;
+
+	let targetGame = null;
+	if ( DataModel.mapGameIdToGame.has( roomId ) )
+	{
+		targetGame = DataModel.mapGameIdToGame.get( roomId );
+	}
+
+	if ( targetGame )
+	{
+		myUser.game = targetGame;
+
+		let arrLivePlayerDataEvent = [];
+		for ( let player of myUser.game.players )
+		{
+			console.log( "onRoomLoaded " + player.userId + " :: profile.prefix=" + player.profile.username.prefix );
+			arrLivePlayerDataEvent.push( { profile: player.profile } );
+		}
+		myUser.socket.emit( "onRoomLoaded", { players: arrLivePlayerDataEvent, roomId: myUser.game.gameId } );
+		
+		myUser.socket.on( "sendEvent", Utils.callAndCatchErrors.bind( this, this._onSendEvent, myUser ) );
+
+		targetGame.players.push( myUser );
+		for ( let player of targetGame.players )
+		{
+			player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: "JOIN", isHost: false, isLocalPlayer: player == myUser, uid: Date.now.toString() } );
+		}
+	}
+	else
+	{
+		// TODO: Error event.
+	}
+}
+
 
 //===================================================
 // Private
@@ -62,20 +98,26 @@ GatewayEventManager.prototype._onCreateRoom = function( myUser )
 	const kGameId = myUser.userId + Date.now().toString();
 	game.gameId = kGameId;
 	game.size = Config.gameRoomSize;
+	game.isPrivate = true;
 	game.init();
 	game.players.push( myUser );
 	DataModel.mapGameIdToGame.set( kGameId, game );
 
 	myUser.game = game;
 
-	myUser.socket.on( "sendEvent", Utils.callAndCatchErrors.bind( this, this._onSendEvent, myUser, liveEventData ) );
+	myUser.socket.on( "sendEvent", Utils.callAndCatchErrors.bind( this, this._onSendEvent, myUser ) );
 	
-	myUser.socket.emit( "onRoomCreated", kGameId );
+	myUser.socket.emit( "onRoomCreated", Config.httpServerUrl + "/?roomId=" + kGameId );
 };
 
 GatewayEventManager.prototype._onSendEvent = function( myUser, liveEventData ) 
 {
 	myUser.game.liveEvents.push( liveEventData );
+
+	if ( liveEventData.type == "START_GAME" )
+	{
+		myUser.game.isStarted = true;
+	}
 
 	for ( let player of myUser.game.players )
 	{
@@ -94,7 +136,10 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 				let targetGame = null;
 				for ( const [ gameId, game ] of DataModel.mapGameIdToGame.entries() )  
 				{
-					if ( game.size == Config.gameRoomSize && game.players.length < game.size )
+					if ( game.size == Config.gameRoomSize 
+						&& game.players.length < game.size 
+						&& !game.isPrivate
+						&& !game.isStarted )
 					{
 						targetGame = game;
 						break;
@@ -105,19 +150,19 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 				{
 					myUser.game = targetGame;
 
-					let arrPlayerProfile = [];
+					let arrLivePlayerDataEvent = [];
 					for ( let player of myUser.game.players )
 					{
 						console.log( "onRoomLoaded " + player.userId + " :: profile.prefix=" + player.profile.username.prefix );
-						arrPlayerProfile.push( player.profile );
+						arrLivePlayerDataEvent.push( { profile: player.profile } );
 					}
-					myUser.socket.emit( "onRoomLoaded", { players: arrPlayerProfile } );
+					myUser.socket.emit( "onRoomLoaded", { players: arrLivePlayerDataEvent, roomId: myUser.game.gameId } );
 
 					targetGame.players.push( myUser );
 					
 					for ( let player of targetGame.players )
 					{
-						player.socket.emit( "onPlayerPresenceUpdated", { player: myUser.profile, type: livePresenceAction } );
+						player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: livePresenceAction, isHost: targetGame.players.length > 0 && myUser == targetGame.players[ 0 ], isLocalPlayer: player == myUser, uid: Date.now.toString() } );
 					}
 				}
 				else
@@ -132,7 +177,7 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 
 					myUser.game = game;
 
-					myUser.socket.emit( "onPlayerPresenceUpdated", { player: myUser.profile, type: livePresenceAction } );
+					myUser.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: livePresenceAction, isHost: true, isLocalPlayer: true, uid: Date.now.toString() } );
 				}
 
 				myUser.socket.on( "sendEvent", Utils.callAndCatchErrors.bind( this, this._onSendEvent, myUser ) );
@@ -144,6 +189,7 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 			{
 				myUser.state = 0;
 
+				let isHost = myUser.game.players[ 0 ] == myUser;
 				let isHostChanged = false;
 				for ( let i = myUser.game.players.length - 1; i >= 0; --i )
 				{
@@ -156,7 +202,7 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 							isHostChanged = true;
 						}
 					}
-					player.socket.emit( "onPlayerPresenceUpdated", { player: DataModel.mapUserIdToProfile.get( myUser.userId ), type: livePresenceAction } );
+					player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: livePresenceAction, isHost: isHost, isLocalPlayer: player == myUser, uid: Date.now.toString() } );
 				}
 
 				if ( myUser.game.length == 0 )
@@ -169,7 +215,7 @@ GatewayEventManager.prototype._onUpdatePlayerPresence = function( myUser, livePr
 					{
 						for ( let player of myUser.game.players )
 						{
-							player.socket.emit( "onPlayerPresenceUpdated", { player: DataModel.mapUserIdToProfile.get( myUser.game.players[ 0 ] ), type: "HOST_CHANGED" } );
+							player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: "HOST_CHANGED", isHost: isHost, isLocalPlayer: player == myUser, uid: Date.now.toString() } );
 						}
 					}
 				}
