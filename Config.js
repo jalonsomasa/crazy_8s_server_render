@@ -14,7 +14,7 @@ module.exports = Config;
  * @static
  * @const
  */
-Config.isDebugMode = true;
+Config.isDebugMode = false;
 
 /**
  * @type {httpServerUrl}
@@ -35,7 +35,7 @@ Config.chatServerUrl = null;
  * @static
  * @const
  */
-Config.gameRoomSize = 2;
+Config.gameRoomSize = 4;
 
 
 //===================================================
@@ -50,7 +50,7 @@ Config.init = function( chatServerPort )
 {
     if ( Config.isDebugMode )
     {
-        Config.httpServerUrl = "http://localhost/";
+        Config.httpServerUrl = "http://localhost:8080";
         Config.chatServerUrl = "http://localhost:" + chatServerPort.toString();
     }
     else

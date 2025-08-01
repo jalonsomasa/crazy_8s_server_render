@@ -71,6 +71,13 @@ function onClientConnected( socket )
         const kUserProfile = DataModel.mapUserIdToProfile.has( kUserId ) ? DataModel.mapUserIdToProfile.get( kUserId ) : undefined;
         user.profile = kUserProfile;
         socket.emit( "onProfileChange", kUserProfile );
+
+        if ( kUserProfile 
+            && socket.handshake.query.roomId )
+        {
+            console.log( kUserId + " joinPrivateGame " + socket.handshake.query.roomId );
+            ServiceLocator.gatewayEventManager.joinPrivateGame( user, socket.handshake.query.roomId );
+        }
     }
     else
     {
@@ -129,7 +136,7 @@ function onClientConnected( socket )
                 }
                 else
                 {
-                    player.socket.emit( "onPlayerPresenceUpdated", { player: myUser.profile, type: "LEAVE" } );
+                    player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: "LEAVE" } );
                 }
             }
 
@@ -144,7 +151,7 @@ function onClientConnected( socket )
                 {
                     for ( let player of myUser.game.players )
                     {
-                        player.socket.emit( "onPlayerPresenceUpdated", { player: myUser.game.players[ 0 ].profile, type: "HOST_CHANGED" } );
+                        player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.game.players[ 0 ].profile, action: "HOST_CHANGED" } );
                     }
                 }
             }

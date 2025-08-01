@@ -14,6 +14,8 @@ function Game()
 	this._size = null;
 	this._arrUser = null;
 	this._arrLiveEventData = [];
+	this._isPrivate = null;
+	this._isStarted = null;
 };
 module.exports = Game;
 Game.prototype.constructor = Game;
@@ -29,6 +31,8 @@ Game.prototype.init = function()
 	console.assert( this._size > 1, "Game.js :: init() :: this._size cannot be less than 1." );
 
 	this._arrUser = [];
+	this._isPrivate = false;
+	this._isStarted = false;
 };
 
 
@@ -64,4 +68,20 @@ Object.defineProperty(
 	"liveEvents", 
 	{ 
 		get: function() { return this._arrLiveEventData; } 
+	} );
+
+Object.defineProperty(
+	Game.prototype, 
+	"isPrivate", 
+	{ 
+		get: function() { return this._isPrivate; } ,
+		set: function( value ) { this._isPrivate = value; }
+	} );
+
+Object.defineProperty(
+	Game.prototype, 
+	"isStarted", 
+	{ 
+		get: function() { return this._isStarted; } ,
+		set: function( value ) { this._isStarted = value; }
 	} );
