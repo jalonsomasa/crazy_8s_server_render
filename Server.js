@@ -136,7 +136,7 @@ function onClientConnected( socket )
                 }
                 else
                 {
-                    player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: "LEAVE" } );
+                    player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.profile, action: "LEAVE", uid: myUser.userId, isLocalPlayer: false } );
                 }
             }
 
@@ -151,7 +151,7 @@ function onClientConnected( socket )
                 {
                     for ( let player of myUser.game.players )
                     {
-                        player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.game.players[ 0 ].profile, action: "HOST_CHANGED" } );
+                        player.socket.emit( "onPlayerPresenceUpdated", { profile: myUser.game.players[ 0 ].profile, action: "HOST_CHANGED", uid: myUser.userId, isLocalPlayer: false } );
                     }
                 }
             }
